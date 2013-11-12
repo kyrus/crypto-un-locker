@@ -41,6 +41,11 @@ identification and decryption tool in Python. The tool can identify
 CryptoLocker files on a local disk and optionally decrypt them given the 
 private key material.
 
+CryptoUnLocker requires Python 2.7 and the [PyCrypto](https://pypi.python.org/pypi/pycrypto)
+module.
+
+## Usage
+
 	usage: CryptoUnLocker.py [-h] (--keyfile KEYFILE | --keydir KEYDIR) [-r] [-v]
 	                         [--dry-run] [--detect]
 	                         encrypted_filenames [encrypted_filenames ...]
@@ -62,4 +67,19 @@ private key material.
 	  --dry-run            Don't actually write decrypted files
 	  --detect             Don't try to decrypt; just find files that may be
 	                       CryptoLockered
+	  -o DESTDIR           Copy all decrypted files to an output directory,
+	                       mirroring the source path
+
+By default, if CryptoUnLocker is able to decrypt a file, it will overwrite the 
+original file with the decrypted version and copy the original encrypted
+version to the filename + `.bak` extension.
+
+The optional `-o` argument causes CryptoUnLocker to mirror the original source
+directory structure, copying decrypted files into the destination directory
+specified by `-o`. For example, given the following command line:
+
+	CryptoUnLocker.py --keydir /keys -o /mnt/output -r /mnt/input
+
+will find all files in /mnt/input, and any that are CryptoLockered will be 
+decrypted to the same directory and filename under /mnt/output.
 
