@@ -11,7 +11,7 @@ Offset     | Length | Description
 ---------- | ------ | -----------
 0x00       | 0x14   | SHA1 hash of '\x00'\*4 followed by the next 0x100 bytes (the "file header")
 0x14       | 0x100  | File header containing the AES key encrypted with RSA-2048 with PKCS#1 v1.5 padding
-0x100      | remainder | File contents encrypted with above AES key
+0x114      | remainder | File contents encrypted with above AES key
 
 Once the file header is decrypted, The `CryptImportKey` Win32 CryptoAPI 
 function is used to interpret a Microsoft 
@@ -29,9 +29,9 @@ For CryptoLocker, the following values are used:
 
 Field | Value
 ----- | -----
-`bType` | 8 (`PLAINTEXTKEYBLOB`)
-`bVersion` | 2
-`reserved` | 0
+`bType` | 0x08 (`PLAINTEXTKEYBLOB`)
+`bVersion` | 0x02
+`reserved` | 0x0000
 `aiKeyAlg` | 0x6610 (`CALG_AES_256`)
 
 ## CryptoLocker Decrypter & Identification
