@@ -158,11 +158,11 @@ if __name__ == '__main__':
                         help='File containing the private key, or the EXE file provided for decryption')
     group.add_argument('--keydir', action='store', dest='keydir',
                         help='Directory containing any number of private keys; the appropriate private key will be used during the decryption process')
+    group.add_argument('--detect', action='store_true', dest='detect', help="Don't try to decrypt; just find files that may be CryptoLockered")
 
     parser.add_argument('-r', action='store_true', dest='recursive', help="Recursively search subdirectories")
     parser.add_argument('-v', action='store_true', dest='verbose', help="Verbose output")
     parser.add_argument('--dry-run', action='store_true', dest='dry_run', help="Don't actually write decrypted files")
-    parser.add_argument('--detect', action='store_true', dest='detect', help="Don't try to decrypt; just find files that may be CryptoLockered")
     parser.add_argument('-o', action='store', dest='destdir', help='Copy all decrypted files to an output directory, mirroring the source path')
 
     parser.add_argument('encrypted_filenames', nargs="+")
