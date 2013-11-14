@@ -3,7 +3,6 @@
 import struct
 import os
 import argparse
-import glob
 import shutil
 
 from Crypto.Cipher import AES
@@ -144,7 +143,7 @@ def processFile(unlocker, args, pathname, fn):
                     os.makedirs(destdir)
                 open(os.path.join(destdir, fn), 'wb').write(decrypted_file)
             else:
-                shutil.copy2(fn, fn + ".bak")
+                shutil.copy2(fullpath, fullpath + ".bak")
                 open(os.path.join(pathname, fn), 'wb').write(decrypted_file)
     except Exception, e:
         print '[-] UNSUCCESSFUL decrypting file %s: %s' % (fn, e.message)
@@ -187,6 +186,5 @@ if __name__ == '__main__':
             for fn in files:
                 processFile(unlocker, results, root, fn)
     else:
-        for g in results.encrypted_filenames:
-            for fn in glob.glob(g):
-                processFile(unlocker, results, '', fn)
+        for fn in results.encrypted_filenames:
+            processFile(unlocker, results, '', fn)
