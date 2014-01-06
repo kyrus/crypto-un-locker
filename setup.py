@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
-import py2exe
+import sys
+from cx_Freeze import setup, Executable
 
-setup(console=['CryptoUnLocker.py'])
+setup(
+ name="CryptoUnLocker",
+ version="1.0",
+ Description="Detection and Decryption tool for CryptoLocker files",
+ executables= [Executable("CryptoUnLocker.py")]
+)
