@@ -48,6 +48,12 @@ PRIVATEKEYBLOB = namedtuple('PRIVATEKEYBLOB', 'modulus prime1 prime2 exponent1 e
 PUBLICKEYSTRUC_s = struct.Struct('<bbHI')
 RSAPUBKEY_s = struct.Struct('<4sII')
 
+def subtract(a,b):
+    if a == None or b == None:
+        return None
+    else:
+        return ord(b)-ord(a)
+        
 class OutputLevel:
     VerboseLevel, InfoLevel, WarnLevel, ErrorLevel = range(4)
     
@@ -104,6 +110,14 @@ class CryptoUnLocker(object):
         header_hash = SHA.new('\x00'*4 + file_header[0x14:0x114])
         return header_hash.digest() == file_header[:0x14]
 
+    def guessIfWiped(self, fn):
+        file_header = open(fn, 'rb').read(64)
+        if len(file_header) != 64:
+            return False
+        
+        lst = map(subtract, file_header[:32:2], file_header[1:32:2])
+        return not lst or [lst[0]]*len(lst) == lst
+        
     def decryptFile(self, fn):
         aes_key = None
 
@@ -191,8 +205,10 @@ class CryptoUnLockerProcess(object):
         fullpath = os.path.join(pathname, fn)
 
         try:
-            isCryptoLocker = self.unlocker.isCryptoLocker(fullpath)
-            if not isCryptoLocker:
+            if self.unlocker.guessIfWiped(fullpath):
+                self.output(OutputLevel.VerboseLevel, fullpath, "File appears wiped")
+                return
+            elif not self.unlocker.isCryptoLocker(fullpath):
                 self.output(OutputLevel.VerboseLevel, fullpath, "Not a CryptoLocker file")
                 return
             else:
