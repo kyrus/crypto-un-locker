@@ -4,12 +4,16 @@ import struct
 import os
 import argparse
 import shutil
+import sys
 
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from Crypto.Hash import SHA
-
+from Crypto.Util.number import bytes_to_long, long_to_bytes
+from collections import namedtuple
+from datetime import datetime
+import csv
 
 """
 CryptoLocker file structure:
@@ -35,9 +39,18 @@ reserved = 0
 aiKeyAlg = 0x6610 (AES-256)
 
 followed by a DWORD length of 0x20, and finally the 32 byte AES key.
-"""
+"""    
 
+PUBLICKEYSTRUC = namedtuple('PUBLICKEYSTRUC', 'bType bVersion reserved aiKeyAlg')
+RSAPUBKEY = namedtuple('RSAPUBKEY', 'magic bitlen pubexp')
+PRIVATEKEYBLOB = namedtuple('PRIVATEKEYBLOB', 'modulus prime1 prime2 exponent1 exponent2 coefficient privateExponent')
 
+PUBLICKEYSTRUC_s = struct.Struct('<bbHI')
+RSAPUBKEY_s = struct.Struct('<4sII')
+
+class OutputLevel:
+    VerboseLevel, InfoLevel, WarnLevel, ErrorLevel = range(4)
+    
 class CryptoUnLocker(object):
     def __init__(self):
         self.keys = []
@@ -48,12 +61,35 @@ class CryptoUnLocker(object):
         startpos = d.find('-----BEGIN PRIVATE KEY-----')
         endpos = d.find('-----END PRIVATE KEY-----')
 
-        if startpos == -1 or endpos == -1:
-            raise Exception("Could not parse a private key from file %s" % fn)
+        if startpos != -1 and endpos != -1:
+            d = d[startpos:endpos+len('-----END PRIVATE KEY-----')]
+            self.loadKeyFromString(d)
+            return
+            
+        # fall through if the file does not contain a PEM encoded RSA key
+        # try the CryptImportKey Win32 file format
+        if self.CryptImportKey(d):
+            return
 
-        d = d[startpos:endpos+len('-----END PRIVATE KEY-----')]
-
-        self.loadKeyFromString(d)
+        # if we can't import the file, raise an exception
+        raise Exception("Could not parse a private key from file %s" % fn)
+        
+    def CryptImportKey(self, d):
+        publickeystruc = PUBLICKEYSTRUC._make(PUBLICKEYSTRUC_s.unpack_from(d))
+        if publickeystruc.bType == 7 and publickeystruc.bVersion == 2 and publickeystruc.aiKeyAlg == 41984:
+            rsapubkey = RSAPUBKEY._make(RSAPUBKEY_s.unpack_from(d[8:]))
+            if rsapubkey.magic == 'RSA2':
+                bitlen8 = rsapubkey.bitlen/8
+                bitlen16 = rsapubkey.bitlen/16
+                PRIVATEKEYBLOB_s = struct.Struct('%ds%ds%ds%ds%ds%ds%ds' % (bitlen8, bitlen16, bitlen16, bitlen16, bitlen16, bitlen16, bitlen8))
+                privatekey = PRIVATEKEYBLOB._make(map(bytes_to_long, PRIVATEKEYBLOB_s.unpack_from(d[20:])))
+                
+                r = RSA.construct((privatekey.modulus, long(rsapubkey.pubexp), privatekey.privateExponent, 
+                    privatekey.prime1, privatekey.prime2))
+                self.keys.append(r)
+                return True
+                
+        return False
 
     def loadKeyFromString(self, s):
         r = RSA.importKey(s)
@@ -113,41 +149,90 @@ class CryptoUnLocker(object):
         else:
             return None
 
-def processFile(unlocker, args, pathname, fn):
-    if fn.endswith('.bak'):
-        # skip backup files
-        return
+class CryptoUnLockerProcess(object):
+    def __init__(self, args, unlocker):
+        self.args = args
+        self.unlocker = unlocker
+        self.csvfp = None
+        self.csv = None
 
-    fullpath = os.path.join(pathname, fn)
+    def doit(self):
+        if self.args.csvfile:
+            self.csvfp = open(self.args.csvfile,'w')
+            self.csv = csv.writer(self.csvfp)
+            self.csv.writerow(['Timestamp', 'Filename', 'Message'])
 
-    try:
-        isCryptoLocker = unlocker.isCryptoLocker(fullpath)
-        if not isCryptoLocker:
-            if args.verbose:
-                print '[.] Not a CryptoLocker file:', fullpath
-            return
+        keyfiles = []
+        if self.args.keyfile:
+            keyfiles = [self.args.keyfile]
+        elif self.args.keydir:
+            keyfiles = os.listdir(self.args.keydir)
+
+        for fn in keyfiles:
+            try:
+                unlocker.loadKeyFromFile(os.path.join(self.args.keydir, fn))
+                self.output(OutputLevel.VerboseLevel, fn, "Successfully loaded key file")
+            except Exception, e:
+                self.output(OutputLevel.ErrorLevel, fn, "Unsuccessful loading key file: %s" % e.message)
+
+        if self.args.recursive:
+            for root, dirs, files in os.walk(self.args.encrypted_filenames[0]):
+                for fn in files:
+                    self.processFile(root, fn)
         else:
-            if args.detect:
-                print '[+] Found a potential CryptoLocker file:', fullpath
+            for fn in self.args.encrypted_filenames:
+                self.processFile('', fn)
+        
+    def processFile(self, pathname, fn):
+        if fn.endswith('.bak'):
+            # skip backup files
+            return
+
+        fullpath = os.path.join(pathname, fn)
+
+        try:
+            isCryptoLocker = self.unlocker.isCryptoLocker(fullpath)
+            if not isCryptoLocker:
+                self.output(OutputLevel.VerboseLevel, fullpath, "Not a CryptoLocker file")
                 return
-    except Exception, e:
-        print '[-] ERROR opening file %s: %s' % (fullpath, e.message)
-
-    try:
-        decrypted_file = unlocker.decryptFile(fullpath)
-        print '[+] Successfully decrypted file', fn
-        if not args.dry_run:
-            if args.destdir:
-                destdir = os.path.join(args.destdir, pathname)
-                if not os.path.exists(destdir):
-                    os.makedirs(destdir)
-                open(os.path.join(destdir, fn), 'wb').write(decrypted_file)
             else:
-                shutil.copy2(fullpath, fullpath + ".bak")
-                open(os.path.join(pathname, fn), 'wb').write(decrypted_file)
-    except Exception, e:
-        print '[-] UNSUCCESSFUL decrypting file %s: %s' % (fn, e.message)
+                if self.args.detect:
+                    self.output(OutputLevel.InfoLevel, fullpath, "Potential CryptoLocker file")
+                    return
+        except Exception, e:
+            self.output(OutputLevel.ErrorLevel, fullpath, "Unsuccessful opening file: %s" % e.message)
+            return
 
+        try:
+            decrypted_file = self.unlocker.decryptFile(fullpath)
+            self.output(OutputLevel.InfoLevel, fullpath, "Successfully decrypted file")
+            if not self.args.dry_run:
+                if self.args.destdir:
+                    destdir = os.path.join(self.args.destdir, pathname)
+                    if not os.path.exists(destdir):
+                        os.makedirs(destdir)
+                    open(os.path.join(destdir, fn), 'wb').write(decrypted_file)
+                else:
+                    shutil.copy2(fullpath, fullpath + ".bak")
+                    open(os.path.join(pathname, fn), 'wb').write(decrypted_file)
+        except Exception, e:
+            self.output(OutputLevel.InfoLevel, fullpath, "Unsuccessful decrypting file: %s" % e.message)
+
+    def output(self, level, fn, msg):
+        if level == OutputLevel.VerboseLevel and not self.args.verbose:
+            return
+            
+        if self.csv:
+            self.csv.writerow([datetime.now(), fn, msg])
+        
+        icon = '[.]'
+        if level == OutputLevel.InfoLevel:
+            icon = '[+]'
+        elif level > OutputLevel.InfoLevel:
+            icon = '[-]'
+        
+        sys.stderr.write('%s %s: %s\n' % (icon, msg, fn))
+        sys.stderr.flush()        
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Decrypt CryptoLocker encrypted files.')
@@ -163,28 +248,12 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='store_true', dest='verbose', help="Verbose output")
     parser.add_argument('--dry-run', action='store_true', dest='dry_run', help="Don't actually write decrypted files")
     parser.add_argument('-o', action='store', dest='destdir', help='Copy all decrypted files to an output directory, mirroring the source path')
+    parser.add_argument('--csv', action='store', dest='csvfile', help='Output to a CSV file')
 
     parser.add_argument('encrypted_filenames', nargs="+")
 
     results = parser.parse_args()
-
     unlocker = CryptoUnLocker()
+    processor = CryptoUnLockerProcess(results, unlocker)
 
-    if results.keyfile:
-        unlocker.loadKeyFromFile(results.keyfile)
-    elif results.keydir:
-        for fn in os.listdir(results.keydir):
-            try:
-                unlocker.loadKeyFromFile(os.path.join(results.keydir, fn))
-                if results.verbose:
-                    print '[+] Successfully loaded key file', fn
-            except Exception, e:
-                print '[-] Could not load key file %s: %s' % (fn, e.message)
-
-    if results.recursive:
-        for root, dirs, files in os.walk(results.encrypted_filenames[0]):
-            for fn in files:
-                processFile(unlocker, results, root, fn)
-    else:
-        for fn in results.encrypted_filenames:
-            processFile(unlocker, results, '', fn)
+    processor.doit()
