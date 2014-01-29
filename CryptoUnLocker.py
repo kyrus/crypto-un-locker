@@ -172,7 +172,7 @@ class CryptoUnLockerProcess(object):
 
     def doit(self):
         if self.args.csvfile:
-            self.csvfp = open(self.args.csvfile,'w')
+            self.csvfp = open(self.args.csvfile,'wb')
             self.csv = csv.writer(self.csvfp)
             self.csv.writerow(['Timestamp', 'Filename', 'Message'])
 
