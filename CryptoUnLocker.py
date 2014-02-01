@@ -180,11 +180,11 @@ class CryptoUnLockerProcess(object):
         if self.args.keyfile:
             keyfiles = [self.args.keyfile]
         elif self.args.keydir:
-            keyfiles = os.listdir(self.args.keydir)
+            keyfiles = [os.path.join(self.args.keydir, fn) for fn in os.listdir(self.args.keydir)]
 
         for fn in keyfiles:
             try:
-                unlocker.loadKeyFromFile(os.path.join(self.args.keydir, fn))
+                unlocker.loadKeyFromFile(fn)
                 self.output(OutputLevel.VerboseLevel, fn, "Successfully loaded key file")
             except Exception, e:
                 self.output(OutputLevel.ErrorLevel, fn, "Unsuccessful loading key file: %s" % e.message)
@@ -232,7 +232,7 @@ class CryptoUnLockerProcess(object):
                     shutil.copy2(fullpath, fullpath + ".bak")
                     open(os.path.join(pathname, fn), 'wb').write(decrypted_file)
         except Exception, e:
-            self.output(OutputLevel.InfoLevel, fullpath, "Unsuccessful decrypting file: %s" % e.message)
+            self.output(OutputLevel.ErrorLevel, fullpath, "Unsuccessful decrypting file: %s" % e.message)
 
     def output(self, level, fn, msg):
         if level == OutputLevel.VerboseLevel and not self.args.verbose:
