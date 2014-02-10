@@ -46,15 +46,15 @@ module.
 
 ## Usage
 
-	usage: CryptoUnLocker.py [-h] (--keyfile KEYFILE | --keydir KEYDIR) [-r] [-v]
-	                         [--dry-run] [--detect]
+	usage: CryptoUnLocker.py [-h] (--keyfile KEYFILE | --keydir KEYDIR | --detect)
+	                         [-r] [-v] [--dry-run] [-o DESTDIR] [--csv CSVFILE]
 	                         encrypted_filenames [encrypted_filenames ...]
-
+	
 	Decrypt CryptoLocker encrypted files.
-
+	
 	positional arguments:
 	  encrypted_filenames
-
+	
 	optional arguments:
 	  -h, --help           show this help message and exit
 	  --keyfile KEYFILE    File containing the private key, or the EXE file
@@ -62,13 +62,14 @@ module.
 	  --keydir KEYDIR      Directory containing any number of private keys; the
 	                       appropriate private key will be used during the
 	                       decryption process
+	  --detect             Don't try to decrypt; just find files that may be
+	                       CryptoLockered
 	  -r                   Recursively search subdirectories
 	  -v                   Verbose output
 	  --dry-run            Don't actually write decrypted files
-	  --detect             Don't try to decrypt; just find files that may be
-	                       CryptoLockered
 	  -o DESTDIR           Copy all decrypted files to an output directory,
 	                       mirroring the source path
+	  --csv CSVFILE        Output to a CSV file
 
 By default, if CryptoUnLocker is able to decrypt a file, it will overwrite the 
 original file with the decrypted version and copy the original encrypted
