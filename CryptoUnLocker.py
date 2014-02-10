@@ -39,7 +39,7 @@ reserved = 0
 aiKeyAlg = 0x6610 (AES-256)
 
 followed by a DWORD length of 0x20, and finally the 32 byte AES key.
-"""    
+"""
 
 PUBLICKEYSTRUC = namedtuple('PUBLICKEYSTRUC', 'bType bVersion reserved aiKeyAlg')
 RSAPUBKEY = namedtuple('RSAPUBKEY', 'magic bitlen pubexp')
@@ -53,10 +53,10 @@ def subtract(a,b):
         return None
     else:
         return ord(b)-ord(a)
-        
+
 class OutputLevel:
     VerboseLevel, InfoLevel, WarnLevel, ErrorLevel = range(4)
-    
+
 class CryptoUnLocker(object):
     def __init__(self):
         self.keys = []
@@ -71,7 +71,7 @@ class CryptoUnLocker(object):
             d = d[startpos:endpos+len('-----END PRIVATE KEY-----')]
             self.loadKeyFromString(d)
             return
-            
+
         # fall through if the file does not contain a PEM encoded RSA key
         # try the CryptImportKey Win32 file format
         if self.CryptImportKey(d):
@@ -79,7 +79,7 @@ class CryptoUnLocker(object):
 
         # if we can't import the file, raise an exception
         raise Exception("Could not parse a private key from file %s" % fn)
-        
+
     def CryptImportKey(self, d):
         publickeystruc = PUBLICKEYSTRUC._make(PUBLICKEYSTRUC_s.unpack_from(d))
         if publickeystruc.bType == 7 and publickeystruc.bVersion == 2 and publickeystruc.aiKeyAlg == 41984:
@@ -89,12 +89,12 @@ class CryptoUnLocker(object):
                 bitlen16 = rsapubkey.bitlen/16
                 PRIVATEKEYBLOB_s = struct.Struct('%ds%ds%ds%ds%ds%ds%ds' % (bitlen8, bitlen16, bitlen16, bitlen16, bitlen16, bitlen16, bitlen8))
                 privatekey = PRIVATEKEYBLOB._make(map(bytes_to_long, PRIVATEKEYBLOB_s.unpack_from(d[20:])))
-                
+
                 r = RSA.construct((privatekey.modulus, long(rsapubkey.pubexp), privatekey.privateExponent, 
                     privatekey.prime1, privatekey.prime2))
                 self.keys.append(r)
                 return True
-                
+
         return False
 
     def loadKeyFromString(self, s):
@@ -114,10 +114,10 @@ class CryptoUnLocker(object):
         file_header = open(fn, 'rb').read(64)
         if len(file_header) != 64:
             return False
-        
+
         lst = map(subtract, file_header[:32:2], file_header[1:32:2])
         return not lst or [lst[0]]*len(lst) == lst
-        
+
     def decryptFile(self, fn):
         aes_key = None
 
@@ -184,7 +184,7 @@ class CryptoUnLockerProcess(object):
 
         for fn in keyfiles:
             try:
-                unlocker.loadKeyFromFile(fn)
+                self.unlocker.loadKeyFromFile(fn)
                 self.output(OutputLevel.VerboseLevel, fn, "Successfully loaded key file")
             except Exception, e:
                 self.output(OutputLevel.ErrorLevel, fn, "Unsuccessful loading key file: %s" % e.message)
@@ -196,7 +196,7 @@ class CryptoUnLockerProcess(object):
         else:
             for fn in self.args.encrypted_filenames:
                 self.processFile('', fn)
-        
+
     def processFile(self, pathname, fn):
         if fn.endswith('.bak'):
             # skip backup files
@@ -237,20 +237,20 @@ class CryptoUnLockerProcess(object):
     def output(self, level, fn, msg):
         if level == OutputLevel.VerboseLevel and not self.args.verbose:
             return
-            
+
         if self.csv:
             self.csv.writerow([datetime.now(), fn, msg])
-        
+
         icon = '[.]'
         if level == OutputLevel.InfoLevel:
             icon = '[+]'
         elif level > OutputLevel.InfoLevel:
             icon = '[-]'
-        
-        sys.stderr.write('%s %s: %s\n' % (icon, msg, fn))
-        sys.stderr.flush()        
 
-if __name__ == '__main__':
+        sys.stderr.write('%s %s: %s\n' % (icon, msg, fn))
+        sys.stderr.flush()
+
+def main():
     parser = argparse.ArgumentParser(description='Decrypt CryptoLocker encrypted files.')
     group = parser.add_mutually_exclusive_group(required=True)
 
@@ -273,3 +273,9 @@ if __name__ == '__main__':
     processor = CryptoUnLockerProcess(results, unlocker)
 
     processor.doit()
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
+
