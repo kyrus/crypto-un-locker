@@ -5,15 +5,16 @@ import os
 import argparse
 import shutil
 import sys
+from collections import namedtuple
+from datetime import datetime
+import csv
 
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from Crypto.Hash import SHA
-from Crypto.Util.number import bytes_to_long, long_to_bytes
-from collections import namedtuple
-from datetime import datetime
-import csv
+from Crypto.Util.number import bytes_to_long
+
 
 """
 CryptoLocker file structure:
@@ -75,6 +76,13 @@ class CryptoUnLocker(object):
         # fall through if the file does not contain a PEM encoded RSA key
         # try the CryptImportKey Win32 file format
         if self.CryptImportKey(d):
+            return
+
+        # Apparently a new version of CryptoLocker is adding what looks
+        # like a version number to the start of the RSA key format. Try
+        # skipping over the first four bytes of the file then interpreting
+        # the rest as an RSA private key.
+        if self.CryptImportKey(d[4:]):
             return
 
         # if we can't import the file, raise an exception
