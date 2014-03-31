@@ -86,7 +86,7 @@ class CryptoUnLocker(object):
             return
 
         # if we can't import the file, raise an exception
-        raise Exception("Could not parse a private key from file %s" % fn)
+        raise Exception("Could not parse a private key from file")
 
     def CryptImportKey(self, d):
         publickeystruc = PUBLICKEYSTRUC._make(PUBLICKEYSTRUC_s.unpack_from(d))
@@ -197,6 +197,10 @@ class CryptoUnLockerProcess(object):
             except Exception, e:
                 self.output(OutputLevel.ErrorLevel, fn, "Unsuccessful loading key file: %s" % e.message)
 
+        if not len(self.unlocker.keys) and not self.args.detect:
+            self.output(OutputLevel.ErrorLevel, '', 'No key files were successfully loaded. Exiting.')
+            return 1
+
         if self.args.recursive:
             for root, dirs, files in os.walk(self.args.encrypted_filenames[0]):
                 for fn in files:
@@ -204,6 +208,8 @@ class CryptoUnLockerProcess(object):
         else:
             for fn in self.args.encrypted_filenames:
                 self.processFile('', fn)
+
+        return 0
 
     def processFile(self, pathname, fn):
         if fn.endswith('.bak'):
@@ -255,7 +261,10 @@ class CryptoUnLockerProcess(object):
         elif level > OutputLevel.InfoLevel:
             icon = '[-]'
 
-        sys.stderr.write('%s %s: %s\n' % (icon, msg, fn))
+        if fn:
+            sys.stderr.write('%s %s: %s\n' % (icon, msg, fn))
+        else:
+            sys.stderr.write('%s %s\n' % (icon, msg))
         sys.stderr.flush()
 
 def main():
@@ -280,9 +289,7 @@ def main():
     unlocker = CryptoUnLocker()
     processor = CryptoUnLockerProcess(results, unlocker)
 
-    processor.doit()
-
-    return 0
+    return processor.doit()
 
 if __name__ == '__main__':
     sys.exit(main())
