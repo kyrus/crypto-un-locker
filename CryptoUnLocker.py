@@ -8,6 +8,7 @@ import sys
 from collections import namedtuple
 from datetime import datetime
 import csv
+import re
 
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
@@ -49,6 +50,9 @@ PRIVATEKEYBLOB = namedtuple('PRIVATEKEYBLOB', 'modulus prime1 prime2 exponent1 e
 PUBLICKEYSTRUC_s = struct.Struct('<bbHI')
 RSAPUBKEY_s = struct.Struct('<4sII')
 
+key_re = re.compile('-----BEGIN.*KEY-----\n(.*)\n-----END.*KEY-----', re.DOTALL)
+
+
 def subtract(a,b):
     if a == None or b == None:
         return None
@@ -65,12 +69,9 @@ class CryptoUnLocker(object):
     def loadKeyFromFile(self, fn):
         d = open(fn, 'rb').read()
 
-        startpos = d.find('-----BEGIN PRIVATE KEY-----')
-        endpos = d.find('-----END PRIVATE KEY-----')
-
-        if startpos != -1 and endpos != -1:
-            d = d[startpos:endpos+len('-----END PRIVATE KEY-----')]
-            self.loadKeyFromString(d)
+        matches = key_re.match(d)
+        if matches:
+            self.loadKeyFromString(matches.group(0))
             return
 
         # fall through if the file does not contain a PEM encoded RSA key
